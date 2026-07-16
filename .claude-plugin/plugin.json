@@ -1,0 +1,10 @@
+{
+  "name": "claude-forge",
+  "version": "0.1.0",
+  "displayName": "Claude Forge",
+  "description": "Build/test/lint delegation and JVM/Android dependency updates (Gradle plugins, Google Maven)",
+  "author": { "name": "Alexander V. Zinin", "email": "azinin@gmail.com", "url": "https://github.com/zinin" },
+  "repository": "https://github.com/zinin/claude-forge",
+  "license": "MIT",
+  "keywords": ["claude-code", "build", "gradle", "maven", "android", "dependencies"]
+}
