@@ -5,7 +5,7 @@ All notable changes to claude-forge will be documented here.
 ## [Unreleased]
 
 ### Changed
-- `build-runner` agent hardening against hung/slow builds: explicit 10-minute Bash timeout on every build command (dependency installs included), one-build-at-a-time rule, bounded wait protocol for commands moved to the background (sleep+grep polling, wait budget, orphaned-build reporting — never a re-run), `--console=plain` on every Gradle invocation and `-B` on Maven, INFRASTRUCTURE FAILURE report format with lock-owner diagnostics and extended daemon-failure signatures (read-only `ps`/`jps`/`jstack` plus `sleep` pacing), model `haiku` → `sonnet`.
+- `build-runner` agent hardening against hung/slow builds: explicit 30-minute Bash timeout ask on every build command (dependency installs included; harness-clamped to the host ceiling), one-build-at-a-time rule, bounded wait protocol for commands moved to the background (sleep+grep polling, wait budget, orphaned-build reporting — never a re-run), `--console=plain` on every Gradle invocation and `-B` on Maven, INFRASTRUCTURE FAILURE report format with lock-owner diagnostics and extended daemon-failure signatures (read-only `ps`/`jps`/`jstack` plus `sleep` pacing), model `haiku` → `sonnet`.
 - `build` skill: strictly sequential agent dispatch, infrastructure-failure retry etiquette (recovery first, then at most one retry; at most 4 build runs total), surgical Daemon Recovery Procedure (`--stop` → identity-checked `kill` of the confirmed lock owner only) executed by the main session, INFRASTRUCTURE FAILURE in the output format.
 
 ### Added
