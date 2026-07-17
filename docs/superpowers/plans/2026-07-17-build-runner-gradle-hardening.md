@@ -71,9 +71,9 @@ If the task is generic (e.g., "build", "test", "run tests"), proceed to Step 1 t
 
 These rules apply to EVERY build/test/lint command you run — including exact commands passed by the caller in Step 0:
 
-1. **Always set an explicit timeout.** Every Bash call that runs a build/test/lint command — or any other potentially long-running command, including dependency installs (`npm install`, `uv sync`, `poetry install`) — MUST pass `timeout: 600000` (10 minutes). Never rely on the default 120-second timeout — a typical build exceeds it and gets moved to the background mid-run.
+1. **Always set an explicit timeout.** Every Bash call that runs a build/test/lint command — or any other potentially long-running command, including dependency installs (`npm install`, `uv sync`, `poetry install`) — MUST pass `timeout: 1800000` (30 minutes; the harness silently clamps it to the effective ceiling — 10 minutes on a host without `BASH_MAX_TIMEOUT_MS` configured). Never rely on the default 120-second timeout — a typical build exceeds it and gets moved to the background mid-run.
 2. **One build at a time.** Never start a new build/test/lint command while a previous one is still running — including a command that was moved to the background. Overlapping builds contend for global cache locks and spawn extra daemons.
-3. **If a command is moved to the background** (message like `Command did not complete within its 600s timeout and was moved to the background (ID: ...)`):
+3. **If a command is moved to the background** (message like `Command did not complete within its <N>s timeout and was moved to the background (ID: ...)`):
    - Do NOT re-run the command.
    - Poll instead of re-reading: run `sleep 30`, then Grep the task output file (its path is given in the background notification) for `BUILD SUCCESSFUL|BUILD FAILED|FAILURE:`; repeat the cycle. A completion notification may also arrive between tool calls — treat it as a bonus, not the mechanism.
    - When a completion marker appears, Read the tail of the output file (offset near the end) and report the actual final result — never a guess.
@@ -401,13 +401,14 @@ Claude-Session: <URL текущей сессии-исполнителя>"
 
 ## Daemon Recovery Procedure
 
-Run in the MAIN session — the build-runner agent must never kill daemons. The commands below (`./gradlew --stop`, `jps`, `kill`, `jstack`, `sleep`) are recovery commands, not build/test/lint commands: the "always delegate to build-runner" rule does NOT apply to them — run them directly, never dispatch them to build-runner. Use when an INFRASTRUCTURE FAILURE report says the lock owner is alive (or reports an orphaned background build), or when the user reports a stuck build:
+Run in the MAIN session — the build-runner agent must never kill daemons. The commands below (`./gradlew --stop`, `jps`, `ps`, `kill`, `jstack`, `sleep`) are recovery commands, not build/test/lint commands: the "always delegate to build-runner" rule does NOT apply to them — run them directly, never dispatch them to build-runner. Use when an INFRASTRUCTURE FAILURE report says the lock owner is alive (or reports an orphaned background build), or when the user reports a stuck build:
 
 1. Run `jps -lv | grep -E 'GradleDaemon|KotlinCompileDaemon'` and note the list (to compare after `--stop`).
-2. Run `./gradlew --stop` in the project directory (stops daemons of the project's Gradle version only). If the project has no `gradlew` wrapper, skip to step 3.
-3. Re-check with `jps`; `kill <pid>` each surviving daemon from step 1; run `sleep 15`; `kill -9` any that remain.
-4. Run `sleep 20` before retrying — a cancelled daemon is not reused, and an instant retry spawns extra cold daemons.
-5. Dispatch ONE retry via build-runner. The retry will be slow (cold Gradle and Kotlin daemons) — slow is not hung. If it hangs again: find the new daemon PID via `jps` and capture `jstack <pid> | head -200`, then report to the user instead of looping.
+2. Run `./gradlew --stop` in the project directory (stops daemons of the project's Gradle version only). If the project has no `gradlew` wrapper, skip this step.
+3. Target ONLY the lock owner from the agent's report: run `ps -fp <owner pid>` and confirm it is still a Gradle/Kotlin daemon of THIS project (guards against PID reuse). If it belongs to another project, an IDE, or another session — do NOT kill it; report to the user and ask. If the report has no owner PID (orphaned background build, manual trigger) — skip steps 3–4: `--stop` plus the pause usually suffices, and a persisting hang will surface a lock owner on the retry.
+4. If confirmed and still alive: `kill <owner pid>`; run `sleep 15`; if it survives — `kill -9 <owner pid>`.
+5. Run `sleep 20` before retrying — a cancelled daemon is not reused, and an instant retry spawns extra cold daemons.
+6. Dispatch ONE retry via build-runner. The retry will be slow (cold Gradle and Kotlin daemons) — slow is not hung. If it fails with ANOTHER live lock owner: repeat the identity check from step 3 for the new PID once, then stop — report to the user instead of looping. If it hangs again: find the daemon PID via `jps` and capture `jstack <pid> | head -200`, then report to the user.
 
 ## Limitations
 ```
@@ -510,8 +511,11 @@ For reliable long builds (especially Gradle) configure the host once:
   { "env": { "BASH_DEFAULT_TIMEOUT_MS": "600000", "BASH_MAX_TIMEOUT_MS": "1800000" } }
   ```
 
-  Without this any command longer than 2 minutes is moved to the background mid-build
-  (the agent handles that, but foreground builds are simpler and more reliable).
+  `BASH_MAX_TIMEOUT_MS` raises the per-call ceiling: the agent always asks for a 30-minute
+  timeout, which is silently clamped to this ceiling (10 minutes on an unconfigured host) —
+  with this setting long builds stay in the foreground instead of being moved to the
+  background. `BASH_DEFAULT_TIMEOUT_MS` covers commands that pass no explicit timeout
+  (main-session commands, recovery steps).
 - **Gradle daemon idle timeout** — in `~/.gradle/gradle.properties` (add or change the line):
 
   ```
@@ -609,7 +613,7 @@ Claude-Session: <URL текущей сессии-исполнителя>"
 
 ### Changed
 - `build-runner` agent hardening against hung/slow builds: explicit 10-minute Bash timeout on every build command (dependency installs included), one-build-at-a-time rule, bounded wait protocol for commands moved to the background (sleep+grep polling, wait budget, orphaned-build reporting — never a re-run), `--console=plain` on every Gradle invocation and `-B` on Maven, INFRASTRUCTURE FAILURE report format with lock-owner diagnostics and extended daemon-failure signatures (read-only `ps`/`jps`/`jstack` plus `sleep` pacing), model `haiku` → `sonnet`.
-- `build` skill: strictly sequential agent dispatch, infrastructure-failure retry etiquette (recovery first, then at most one retry; at most 4 build runs total), Daemon Recovery Procedure (`--stop` → `jps` → `kill`) executed by the main session, INFRASTRUCTURE FAILURE in the output format.
+- `build` skill: strictly sequential agent dispatch, infrastructure-failure retry etiquette (recovery first, then at most one retry; at most 4 build runs total), surgical Daemon Recovery Procedure (`--stop` → identity-checked `kill` of the confirmed lock owner only) executed by the main session, INFRASTRUCTURE FAILURE in the output format.
 
 ### Added
 - README section "Recommended host setup" (Bash timeout env vars, Gradle daemon idle timeout, multi-JDK toolchain pinning, recovery permissions, quick-diagnostics runbook).
@@ -632,7 +636,7 @@ git status --short
 
 Запустить тестовую сессию с изменённым плагином (`claude --plugin-dir /opt/github/zinin/claude-forge`) на реальном Gradle-проекте и проверить три сценария:
 
-1. Сборка >2 мин: команда агента идёт с `timeout: 600000` и `--console=plain`, завершается в форграунде, отчёт корректен.
+1. Сборка >2 мин: команда агента идёт с `timeout: 1800000` (кламп к потолку хоста) и `--console=plain`, завершается в форграунде, отчёт корректен.
 2. Сборка >10 мин (или искусственно замедленная): уходит в фон; агент поллит `sleep 30` + Grep, НЕ перезапускает сборку, отчитывается фактическим результатом.
 3. Негативный кейс: занять глобальный lock вторым Gradle-процессом → агент отдаёт INFRASTRUCTURE FAILURE с верным Owner PID и Recommended Action; скилл выполняет ровно один ретрай (с recovery при живом владельце).
 
