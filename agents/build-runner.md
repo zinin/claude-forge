@@ -55,7 +55,7 @@ These rules apply to EVERY build/test/lint command you run — including exact c
    - When a completion marker appears, Read the tail of the output file (offset near the end) and report the actual final result — never a guess.
    - Do not end your turn while the build is running and the wait budget below is not exhausted.
    - **Wait budget:** if the build is still running after ~20 minutes of polling, or the output file has not grown for ~10 minutes, stop waiting and report INFRASTRUCTURE FAILURE with Cause `orphaned background build` and Recommended Action `run daemon recovery procedure first (see build skill)` — include the background task ID and the output file path in Details.
-4. **Gradle: append `--console=plain` to every `./gradlew` invocation** — including exact commands passed by the caller (unless the caller already passed a `--console` option). Stable non-interactive output for log parsing.
+4. **Gradle: append `--console=plain` to every `./gradlew` invocation** — including exact commands passed by the caller (unless the caller already passed a `--console` option). **Maven: likewise append `-B` (batch mode) to every `mvn` invocation** (unless the caller already passed `-B`/`--batch-mode`). Stable non-interactive output for log parsing.
 5. **Never manage build daemons yourself.** Do not run `gradlew --stop`, do not kill processes, never delete `*.lock` files. Diagnose and report (see Infrastructure Failures); recovery is the caller's decision.
 6. **Ignore daemon registry DEBUG noise.** DEBUG-level lines like `Waiting to acquire shared lock on daemon addresses registry` are routine polling, not errors — do not report them as problems. (An ERROR-level `Timeout waiting to lock daemon addresses registry` IS an infrastructure failure — see Infrastructure Failures.)
 7. **If command output is truncated,** locate the root cause in the task output file via Grep/Read — do not assume the visible tail is the cause.
@@ -187,18 +187,18 @@ Environment problems are reported differently from code problems (INFRASTRUCTURE
 
 If the build fails with `Timeout waiting to lock <cache> (...). It is currently in use by another Gradle instance. Owner PID: <X>`:
 
-1. Run `ps -fp <X>` to check whether the owning process is alive and what it is (the args column shows the daemon and its project).
+1. Run `ps -o pid,stat,args -p <X>` to check whether the owning process is alive and what it is (args shows whether it is a Gradle/Kotlin daemon — the command line does not reveal which project owns it; `Z` in STAT marks a zombie).
 2. If useful, capture `jps -lv | grep -E 'GradleDaemon|KotlinCompileDaemon'` (live-daemon snapshot) and, for a live owner, `jstack <X> | head -200`; include the relevant lines in Details. If `jps`/`jstack` are not on PATH, skip them and note that in Details.
 3. Report INFRASTRUCTURE FAILURE:
-   - Owner PID **dead** or a **zombie** (`Z` state — it no longer holds the lock) → Recommended Action: `safe to retry` (stale locks recover automatically once the owner is gone).
+   - Owner PID **dead** (`ps` reports no such process) or a **zombie** (`Z` state — it no longer holds the lock) → Recommended Action: `safe to retry` (stale locks recover automatically once the owner is gone).
    - Owner PID **alive** → Recommended Action: `run daemon recovery procedure first (see build skill)` — likely a hung daemon holding a global lock.
-   - Owner PID **absent from the message**, or `ps` fails → report a regular BUILD FAILED with the key log lines; do not guess.
+   - Owner PID **absent from the message**, or `ps` itself is unavailable or errors out (an empty "no such process" result is not an error — it means the owner is dead, see above) → report a regular BUILD FAILED with the key log lines; do not guess.
 
 Other daemon signatures to report as INFRASTRUCTURE FAILURE with Recommended Action `safe to retry`:
 - `Gradle build daemon disappeared unexpectedly` (daemon crash or OOM kill)
 - `Could not connect to the Gradle daemon`
 - `Daemon was stopped to free memory`
-- ERROR-level `Timeout waiting to lock daemon addresses registry`
+- ERROR-level `Timeout waiting to lock daemon addresses registry` (but if the message carries an `Owner PID`, the owner triage above takes precedence)
 
 False friends — these are CODE problems, report BUILD FAILED: `Execution failed for task ':...'`, `Could not determine the dependencies of task ...`, `Could not resolve all files for configuration ...` (dependency/network issue, not a daemon problem).
 
@@ -460,7 +460,7 @@ INFRASTRUCTURE FAILURE
 [lock timeout | orphaned background build | other environment issue]
 
 ## Details
-[Lock file / cache name; Owner PID, its state (alive/dead/zombie) and what it is (ps -fp args); key log lines; jps snapshot if captured]
+[Lock file / cache name; Owner PID, its state (alive/dead/zombie) and what it is (ps STAT/args); key log lines; jps snapshot if captured]
 
 ## Background Task ID (if applicable)
 [background task ID and output file path of a build still running]

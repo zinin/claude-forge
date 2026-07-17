@@ -72,7 +72,7 @@ For reliable long builds (especially Gradle) configure the host once:
 
   ```
   jps -lv | grep -E 'GradleDaemon|KotlinCompileDaemon'
-  ps -fp <pid>
+  ps -o pid,stat,args -p <pid>
   jstack <pid> | head -100
   ```
 
