@@ -64,10 +64,10 @@ For reliable long builds (especially Gradle) configure the host once:
   Gradle probes every installed JDK with no timeout; one broken JDK can hang builds forever.
   Replace the paths with your actual JDKs; skip this if other projects on this machine rely
   on toolchain auto-detection.
-- **Recovery permissions** — the build skill's Daemon Recovery Procedure runs `jps`, `kill`
-  and `jstack` in the MAIN session. Allow `Bash(jps:*)`, `Bash(kill:*)`, `Bash(jstack:*)`
-  (or confirm the prompts); the procedure is idempotent — safe to restart. The agent's own
-  diagnostics call `jps`/`jstack` from PATH — keep a JDK `bin` on PATH.
+- **Recovery permissions** — the build skill's Daemon Recovery Procedure runs `jps`, `ps`,
+  `kill` and `jstack` in the MAIN session. Allow `Bash(jps:*)`, `Bash(ps:*)`, `Bash(kill:*)`,
+  `Bash(jstack:*)` (or confirm the prompts); the procedure is idempotent — safe to restart.
+  The agent's own diagnostics call `jps`/`jstack` from PATH — keep a JDK `bin` on PATH.
 - **Quick diagnostics** — if a build looks stuck, check by hand:
 
   ```
