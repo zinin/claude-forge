@@ -51,10 +51,17 @@ These rules apply to EVERY build/test/lint command you run — including exact c
 2. **One build at a time.** Never start a new build/test/lint command while a previous one is still running — including a command that was moved to the background. Overlapping builds contend for global cache locks and spawn extra daemons.
 3. **If a command is moved to the background** (message like `Command did not complete within its <N>s timeout and was moved to the background (ID: ...)`):
    - Do NOT re-run the command.
-   - Poll instead of re-reading: run `sleep 30`, then Grep the task output file (its path is given in the background notification) for `BUILD SUCCESSFUL|BUILD FAILED|FAILURE:`; repeat the cycle. A completion notification may also arrive between tool calls — treat it as a bonus, not the mechanism.
-   - When a completion marker appears, Read the tail of the output file (offset near the end) and report the actual final result — never a guess.
+   - Poll instead of re-running: run `sleep 30`, then Grep the task output file (its path is given in the background notification) for the stack's completion marker, then repeat the cycle. Markers differ by stack:
+     - **Gradle:** `BUILD SUCCESSFUL|BUILD FAILED|FAILURE:`
+     - **Maven:** `BUILD SUCCESS|BUILD FAILURE`
+     - **Other stacks** (npm/go/pytest/…) print no standard completion marker — poll for the output file no longer growing instead, then read the tail to classify.
+
+     A completion notification may also arrive between tool calls — treat it as a bonus, not the mechanism.
+   - When a marker appears (or a marker-less build's output file has stopped growing), Read the tail of the output file (offset near the end) and report the actual final result — never a guess.
    - Do not end your turn while the build is running and the wait budget below is not exhausted.
-   - **Wait budget:** if the build is still running after ~20 minutes of polling, or the output file has not grown for ~10 minutes, stop waiting and report INFRASTRUCTURE FAILURE with Cause `orphaned background build` and Recommended Action `run daemon recovery procedure first (see build skill)` — include the background task ID and the output file path in Details.
+   - **Wait budget:** if the build is still running after ~20 minutes of polling, or the output file has not grown for ~10 minutes, stop waiting — but first Read the tail: if the build actually finished (a success/failure marker or a completed test summary is present), report that real result instead. Only if the tail shows no completion:
+     - **Gradle:** report INFRASTRUCTURE FAILURE with Cause `orphaned background build` and Recommended Action `run daemon recovery procedure first (see build skill)` — include the background task ID and the output file path in Details.
+     - **Other stacks:** report BUILD FAILED (the background build did not finish within the wait budget and may still be running — give the background task ID and output file path); non-Gradle stacks have no daemon recovery (see Infrastructure Failures).
 4. **Gradle: append `--console=plain` to every `./gradlew` invocation** — including exact commands passed by the caller (unless the caller already passed a `--console` option). **Maven: likewise append `-B` (batch mode) to every `mvn` invocation** (unless the caller already passed `-B`/`--batch-mode`). Stable non-interactive output for log parsing.
 5. **Never manage build daemons yourself.** Do not run `gradlew --stop`, do not kill processes, never delete `*.lock` files. Diagnose and report (see Infrastructure Failures); recovery is the caller's decision.
 6. **Ignore daemon registry DEBUG noise.** DEBUG-level lines like `Waiting to acquire shared lock on daemon addresses registry` are routine polling, not errors — do not report them as problems. (An ERROR-level `Timeout waiting to lock daemon addresses registry` IS an infrastructure failure — see Infrastructure Failures.)
@@ -188,7 +195,7 @@ Environment problems are reported differently from code problems (INFRASTRUCTURE
 If the build fails with `Timeout waiting to lock <cache> (...). It is currently in use by another Gradle instance. Owner PID: <X>`:
 
 1. Run `ps -o pid,stat,args -p <X>` to check whether the owning process is alive and what it is (args shows whether it is a Gradle/Kotlin daemon — the command line does not reveal which project owns it; `Z` in STAT marks a zombie).
-2. If useful, capture `jps -lv | grep -E 'GradleDaemon|KotlinCompileDaemon'` (live-daemon snapshot) and, for a live owner, `jstack <X> | head -200`; include the relevant lines in Details. If `jps`/`jstack` are not on PATH, skip them and note that in Details.
+2. If useful, capture a live-daemon snapshot with `jps -lv` and, for a live owner, `jstack <X>` — run these bare, not piped to `grep`/`head` (those are not in your tools allowlist); pick out the relevant `GradleDaemon`/`KotlinCompileDaemon` lines and the top of the thread dump yourself when you read the output, and include them in Details. If `jps`/`jstack` are not on PATH, skip them and note that in Details.
 3. Report INFRASTRUCTURE FAILURE:
    - Owner PID **dead** (`ps` reports no such process) or a **zombie** (`Z` state — it no longer holds the lock) → Recommended Action: `safe to retry` (stale locks recover automatically once the owner is gone).
    - Owner PID **alive** → Recommended Action: `run daemon recovery procedure first (see build skill)` — likely a hung daemon holding a global lock.
@@ -469,7 +476,7 @@ INFRASTRUCTURE FAILURE
 [safe to retry | run daemon recovery procedure first (see build skill)]
 ```
 
-Use the two Recommended Action phrases verbatim — do not paraphrase them; the calling skill matches on these strings.
+Use the two Recommended Action phrases verbatim — do not paraphrase them. The skill matches `safe to retry` in full, and the recovery label by its prefix `run daemon recovery procedure first` (the `(see build skill)` suffix is fine — matched by prefix, not exact string). A Recommended Action the skill does not recognize degrades to BUILD FAILED (no daemon recovery) — paraphrasing silently loses recovery, it never triggers it wrongly.
 
 ## Important Guidelines
 
