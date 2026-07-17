@@ -12,7 +12,7 @@
 
 ## Execution status (2026-07-17)
 
-Вся файловая работа выполнена и отревьюена (SDD: spec+quality ревью на задачу, ре-ревью после фиксов). Финальное whole-branch ревью (d972c69..3c1ea76): 0 Critical, 0 Important, **Ready to merge — Yes**; гейт мержа — Task 4 Step 3 (смоук-тесты) и пре-PR удаление `docs/superpowers/`. Детали, минорки (все ship-as-is) и вердикты — в леджере `.superpowers/sdd/progress.md`.
+Вся файловая работа выполнена и отревьюена (SDD: spec+quality ревью на задачу, ре-ревью после фиксов). Финальное whole-branch ревью (d972c69..3c1ea76): 0 Critical, 0 Important, **Ready to merge — Yes**. Затем внешнее mesh-review (7 ревьюеров: builtin claude + codex + 5 ext-моделей zai/glm, alibaba/qwen, deepseek/v4-pro, ollama/kimi, ollama/minimax; все 6 врапперов REAL, 0 flip) дало ещё две правки: `07f2a20` (авто-фиксы — Maven `-B` поднят в Execution Rules, честная `ps -o pid,stat,args` вместо `ps -fp`, разведены dead-owner/ps-unavailable, приоритет owner-триажа для registry-lock) и `1f291ae` (5 спорных решений, все одобрены пользователем). HEAD ветки — `1f291ae`. Гейт мержа не изменился: Task 4 Step 3 (смоук-тесты) и пре-PR удаление `docs/superpowers/`. Детали, минорки (все ship-as-is), вердикты ревью и решения по спорным — в леджере `.superpowers/sdd/progress.md`.
 
 ## Global Constraints
 
