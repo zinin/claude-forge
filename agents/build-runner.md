@@ -193,7 +193,7 @@ export JAVA_HOME=/usr/lib/jvm/zulu<VERSION> && ./gradlew clean build --console=p
 
 Environment problems are reported differently from code problems (INFRASTRUCTURE FAILURE format below) and are retried differently by the caller. **If unsure whether a failure is infrastructure or code, classify it as BUILD FAILED** — never steer the caller toward daemon recovery on uncertain grounds.
 
-If the build fails with `Timeout waiting to lock <cache> (...). It is currently in use by another Gradle instance. Owner PID: <X>`:
+If the build fails with `Timeout waiting to lock <cache> (...). It is currently in use by another process. Owner PID: <X>` (exact wording varies by Gradle version — "another process" or "another Gradle instance"):
 
 1. Run `ps -o pid,stat,args -p <X>` to check whether the owning process is alive and what it is (args shows whether it is a Gradle/Kotlin daemon — the command line does not reveal which project owns it; `Z` in STAT marks a zombie).
 2. If useful, capture a live-daemon snapshot with `jps -lv` and, for a live owner, `jstack <X>` — run these bare, not piped to `grep`/`head` (those are not in your tools allowlist); pick out the relevant `GradleDaemon`/`KotlinCompileDaemon` lines and the top of the thread dump yourself when you read the output, and include them in Details. If `jps`/`jstack` are not on PATH, skip them and note that in Details.
