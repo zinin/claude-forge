@@ -14,6 +14,8 @@
 
 Вся файловая работа выполнена и отревьюена (SDD: spec+quality ревью на задачу, ре-ревью после фиксов). Финальное whole-branch ревью (d972c69..3c1ea76): 0 Critical, 0 Important, **Ready to merge — Yes**. Затем внешнее mesh-review (7 ревьюеров: builtin claude + codex + 5 ext-моделей zai/glm, alibaba/qwen, deepseek/v4-pro, ollama/kimi, ollama/minimax; все 6 врапперов REAL, 0 flip) дало ещё две правки: `07f2a20` (авто-фиксы — Maven `-B` поднят в Execution Rules, честная `ps -o pid,stat,args` вместо `ps -fp`, разведены dead-owner/ps-unavailable, приоритет owner-триажа для registry-lock) и `1f291ae` (5 спорных решений, все одобрены пользователем). HEAD ветки — `1f291ae`. Гейт мержа не изменился: Task 4 Step 3 (смоук-тесты) и пре-PR удаление `docs/superpowers/`. Детали, минорки (все ship-as-is), вердикты ревью и решения по спорным — в леджере `.superpowers/sdd/progress.md`.
 
+**Смоук-прогресс (2026-07-18):** сценарии 1 (форграунд >2 мин, frigate) и 2 (фон+поллинг, pbx-bill, реальный 10-мин потолок) — **PASS** форензически. Сценарий 2 вскрыл дефект: харнес блокирует предписанный `sleep 30`+Grep foreground-поллинг **в субагенте** (`Blocked: sleep ... use an until-loop`) — Rule 3 агента переписан на `until <marker>; do sleep 20; done` + guard против `| tee`, коммит **`afc9448`**, повторный прогон чист. **HEAD ветки — `afc9448`.** Остался сценарий 3 (негативный lock-кейс); подпункт 3(b) про пайп `jps|grep` СНЯТ (mesh-review 5/5). Затем — `git rm -r docs/superpowers/` + PR.
+
 ## Global Constraints
 
 - Тексты файлов плагина — на английском, в стиле существующих секций. Кириллицы в `agents/`, `skills/`, `README.md`, `CHANGELOG.md` быть не должно.
