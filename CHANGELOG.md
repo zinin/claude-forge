@@ -2,7 +2,7 @@
 
 All notable changes to claude-forge will be documented here.
 
-## [Unreleased]
+## [0.2.0] - 2026-07-18
 
 ### Changed
 - `build-runner` agent hardening against hung/slow builds: explicit 30-minute Bash timeout ask on every build command (dependency installs included; harness-clamped to the host ceiling), one-build-at-a-time rule, bounded wait protocol for commands moved to the background (until-loop polling of the task output file, wait budget, orphaned-build reporting — never a re-run), `--console=plain` on every Gradle invocation and `-B` on Maven, INFRASTRUCTURE FAILURE report format with lock-owner diagnostics and extended daemon-failure signatures (read-only `ps`/`jps`/`jstack` plus `sleep` pacing), model `haiku` → `sonnet`.
